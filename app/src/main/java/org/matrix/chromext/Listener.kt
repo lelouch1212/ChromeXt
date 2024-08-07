@@ -36,7 +36,9 @@ import org.matrix.chromext.script.parseScript
 import org.matrix.chromext.utils.ERUD_URL
 import org.matrix.chromext.utils.Log
 import org.matrix.chromext.utils.XMLHttpRequest
+import org.matrix.chromext.utils.findMethod
 import org.matrix.chromext.utils.invalidUserScriptUrls
+import org.matrix.chromext.utils.invokeMethod
 import org.matrix.chromext.utils.isChromeXtFrontEnd
 import org.matrix.chromext.utils.isDevToolsFrontEnd
 import org.matrix.chromext.utils.isUserScript
@@ -107,21 +109,26 @@ object Listener {
         .onFailure { callback(null) }
   }
 
-  fun startAction(text: String, currentTab: Any? = null) {
+  fun startAction(text: String, currentTab: Any? = null, auxObject: Any? = null) {
     runCatching {
           val data = JSONObject(text)
           val action = data.getString("action")
           val key = data.getDouble("key")
           val payload = data.optString("payload")
           if (checkPermisson(action, key, currentTab)) {
-            val callback = on(action, payload, currentTab)
+            val callback = on(action, payload, currentTab, auxObject)
             if (callback != null) Chrome.evaluateJavascript(listOf(callback), currentTab)
           }
         }
         .onFailure { Log.i("${it::class.java.name}: startAction fails with " + text) }
   }
 
-  fun on(action: String, payload: String = "", currentTab: Any? = null): String? {
+  fun on(
+      action: String,
+      payload: String = "",
+      currentTab: Any? = null,
+      auxObject: Any? = null
+  ): String? {
     var callback: String? = null
     when (action) {
       "copy" -> {
@@ -142,6 +149,47 @@ object Listener {
         val url = Chrome.getUrl(currentTab)
         if (isUserScript(url)) invalidUserScriptUrls.add(url!!)
         callback = "if (Symbol.ChromeXt) Symbol.ChromeXt.lock(${Local.key},'${Local.name}');"
+      }
+      "close" -> {
+        val activity = Chrome.getContext()
+        if (WebViewHook.isInit && currentTab != null && auxObject != null) {
+          auxObject.invokeMethod(currentTab) { name == "onCloseWindow" }
+        } else if (Chrome.isSamsung &&
+            currentTab != null &&
+            activity::class.java ==
+                Chrome.load("com.sec.android.app.sbrowser.SBrowserMainActivity")) {
+          val manager = activity.invokeMethod { name == "getTabManager" }!!
+          @Suppress("UNCHECKED_CAST")
+          val tabList = manager.invokeMethod { name == "getAllTabList" } as List<Any>
+          tabList
+              .find { it.invokeMethod { name == "getTab" } == currentTab }
+              ?.also { manager.invokeMethod(it) { name == "closeTab" } }
+        } else if (currentTab != null &&
+            activity::class.java == UserScriptProxy.chromeTabbedActivity) {
+          val tab = Chrome.load("org.chromium.chrome.browser.tab.Tab")
+          val tabModel = Chrome.load("org.chromium.chrome.browser.tabmodel.TabModel")
+          val getCurrentTabModel =
+              findMethod(activity::class.java, true) {
+                parameterTypes.size == 0 && returnType == tabModel
+              }
+          val model = getCurrentTabModel.invoke(activity)!!
+          val closeTab =
+              findMethod(model::class.java) {
+                returnType == Boolean::class.java &&
+                    parameterTypes contentDeepEquals
+                        arrayOf(
+                            tab,
+                            tab,
+                            Boolean::class.java,
+                            Boolean::class.java,
+                            Boolean::class.java,
+                            Int::class.java)
+              }
+          closeTab.invoke(model, currentTab, null, false, false, false, 0)
+        } else {
+          val msg = "Closing tab ${currentTab} with context ${activity}"
+          callback = "console.error(new TypeError('ChromeXt Action failure', {cause: '${msg}'}));"
+        }
       }
       "focus" -> {
         Chrome.updateTab(currentTab)

@@ -40,6 +40,7 @@ val supportedPackages =
         "com.vivaldi.browser",
         "com.vivaldi.browser.snapshot",
         "org.bromite.bromite",
+        "org.chromium.chrome",
         "org.chromium.thorium",
         "org.cromite.cromite",
         "org.greatfire.freebrowser",
@@ -65,7 +66,7 @@ class MainHook : IXposedHookLoadPackage, IXposedHookZygoteInit {
                 }
                 .onFailure {
                   initHooks(ContextMenuHook)
-                  if (BuildConfig.DEBUG) Log.ex(it)
+                  if (BuildConfig.DEBUG && !Chrome.isSamsung) Log.ex(it)
                 }
           }
     } else {

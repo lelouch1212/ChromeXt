@@ -49,6 +49,7 @@ object GM {
         "none" -> return@forEach
         "GM_info" -> return@forEach
         "GM.ChromeXt" -> return@forEach
+        "window.close" -> return@forEach
         else ->
             if (localScript.containsKey(it)) {
               grants += localScript.get(it)
@@ -101,6 +102,7 @@ object Local {
   var eruda_version: String?
 
   val anchorInChromeXt: Int
+
   // lineNumber of the anchor in GM.js, used to verify ChromeXt.dispatch
 
   init {
