@@ -94,7 +94,7 @@ object ScriptDbManager {
         codes.add("fixEncoding();")
   }
 
-  fun invokeScript(url: String, webView: Any? = null) {
+  fun invokeScript(url: String, webView: Any? = null, frameId: String? = null) {
     val codes = mutableListOf<String>(Local.initChromeXt)
     val path = resolveContentUrl(url)
     val webSettings = webView?.invokeMethod { name == "getSettings" }
@@ -144,15 +144,31 @@ object ScriptDbManager {
     } else if (runScripts) {
       codes.add("Symbol.ChromeXt.lock(${Local.key}, '${Local.name}');")
     }
-    codes.add("//# sourceURL=local://ChromeXt/init")
-    val code = codes.joinToString("\n")
+    codes.add("//# sourceURL=local://ChromeXt/init" + if (frameId == null) "" else "/" + frameId)
     webSettings?.invokeMethod(true) { name == "setJavaScriptEnabled" }
-    Chrome.evaluateJavascript(listOf(code), webView, bypassSandbox, bypassSandbox)
+    val initScript = codes.joinToString("\n")
+
+    val asyncEvaluation = bypassSandbox || frameId != null
+    var framesGranted = false
+
+    if (!asyncEvaluation)
+        Chrome.evaluateJavascript(
+            listOf(initScript), webView, frameId, bypassSandbox, bypassSandbox)
+    codes.clear()
+    if (asyncEvaluation) codes.add(initScript)
     if (runScripts) {
-      codes.clear()
-      scripts.filter { matching(it, url) }.forEach { GM.bootstrap(it, codes) }
-      Chrome.evaluateJavascript(codes)
+      scripts
+          .filter { matching(it, url) && !(frameId != null && it.noframes) }
+          .forEach {
+            if (it.grant.contains("frames")) framesGranted = true
+            GM.bootstrap(it, codes)
+          }
+      if (!asyncEvaluation) Chrome.evaluateJavascript(codes, webView, frameId)
     }
+    if (asyncEvaluation)
+        Chrome.evaluateJavascript(codes, webView, frameId, bypassSandbox, bypassSandbox)
+
+    if (framesGranted && frameId == null) Chrome.injectFrames(webView)
   }
 
   fun updateScriptStorage() {
