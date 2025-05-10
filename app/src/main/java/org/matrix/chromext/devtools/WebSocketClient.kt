@@ -14,12 +14,15 @@ import org.matrix.chromext.hook.WebViewHook
 import org.matrix.chromext.utils.Log
 import org.matrix.chromext.utils.randomString
 
-class DevToolClient(tabId: String) : LocalSocket() {
+class DevToolClient(tabId: String, tag: String? = null) : LocalSocket() {
 
   val tabId = tabId
+  val tag = tag
   private var cspBypassed = false
   private var id = 1
+  private var listening = false
   private var mClosed = false
+  private var pageEnabled = false
 
   init {
     connectDevTools(this)
@@ -49,6 +52,15 @@ class DevToolClient(tabId: String) : LocalSocket() {
     return mClosed
   }
 
+  fun isPageEnabled(forceActivate: Boolean = false): Boolean {
+    val status = pageEnabled
+    if (forceActivate && !pageEnabled) {
+      command(null, "Page.enable", JSONObject())
+      pageEnabled = true
+    }
+    return status
+  }
+
   fun command(id: Int?, method: String, params: JSONObject?) {
     if (isClosed()) {
       return
@@ -68,7 +80,7 @@ class DevToolClient(tabId: String) : LocalSocket() {
 
   fun bypassCSP(bypass: Boolean) {
     if (cspBypassed == bypass) return
-    command(null, "Page.enable", JSONObject())
+    isPageEnabled(true)
     command(null, "Page.setBypassCSP", JSONObject().put("enabled", bypass))
     cspBypassed = bypass
     if (bypass) DevSessions.add(this)
@@ -84,6 +96,8 @@ class DevToolClient(tabId: String) : LocalSocket() {
   }
 
   fun listen(callback: (JSONObject) -> Unit = { msg -> Log.d(msg.toString()) }) {
+    if (listening) Log.w("client was being listened on")
+    listening = true
     runCatching {
           while (!isClosed()) {
             val type = inputStream.read()
@@ -119,7 +133,7 @@ class DevToolClient(tabId: String) : LocalSocket() {
         }
         .onFailure {
           if (!isClosed()) {
-            Log.e("Fail to listen at tab ${tabId}: ${it.message}")
+            Log.ex(it, "Listening at tab ${tabId}")
           }
         }
     close()

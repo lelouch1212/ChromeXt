@@ -1038,7 +1038,7 @@ GM.bootstrap = () => {
   if (ChromeXt.scripts.findIndex((e) => e.script.id == GM_info.script.id) != -1)
     return;
 
-  const row = /\/\/\s+@(\S+)\s+(.+)/g;
+  const row = /\/\/\s+@(\S+)([ \t]+(.+))?/g;
   const meta = GM_info.script;
   if (typeof meta.code != "function" && typeof ChromeXt != "undefined") {
     return;
@@ -1047,8 +1047,8 @@ GM.bootstrap = () => {
   while ((match = row.exec(GM_info.scriptMetaStr.trim())) !== null) {
     if (meta[match[1]]) {
       if (typeof meta[match[1]] == "string") meta[match[1]] = [meta[match[1]]];
-      meta[match[1]].push(match[2]);
-    } else meta[match[1]] = match[2];
+      meta[match[1]].push(match[3]);
+    } else meta[match[1]] = match[3] ? match[3] : true;
   }
   for (const it of [
     "include",
@@ -1102,7 +1102,9 @@ GM.bootstrap = () => {
           // Avoid redefining global non-enumerable classes, though they are accessible to the getter
           this.window[prop] = value;
         }
-        if (this.libLoading) Reflect.set(...arguments);
+        if (meta["inject-into"] != "content" && meta["sandbox"] != "DOM") {
+          if (this.libLoading) Reflect.set(...arguments);
+        }
         return true;
       },
       get(target, prop, receiver) {
