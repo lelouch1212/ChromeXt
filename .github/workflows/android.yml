@@ -19,13 +19,23 @@ jobs:
         java-version: '21'
         distribution: 'temurin'
 
-    - name: Build with Gradle
-      run: ./gradlew app:assembleRelease
+    - name: Build debug
+      run: ./gradlew app:assembleDebug
         
+    - name: Build release
+      if: ${{ ( github.event_name != 'pull_request' && github.ref == 'refs/heads/master' ) || github.ref_type == 'tag' }}
+      run: ./gradlew app:assembleRelease
+
+    - name: Rename debug build
+      run: mv app/build/outputs/apk/debug/app-debug.apk app/build/ChromeXt_debug.apk
+
     - name: Rename signed apk
+      if: ${{ ( github.event_name != 'pull_request' && github.ref == 'refs/heads/master' ) || github.ref_type == 'tag' }}
       run: mv app/build/outputs/apk/release/app-release-unsigned.apk app/build/outputs/apk/release/ChromeXt.apk
 
+
     - uses: noriban/sign-android-release@master
+      if: ${{ ( github.event_name != 'pull_request' && github.ref == 'refs/heads/master' ) || github.ref_type == 'tag' }}
       name: Sign app APK
       id: sign_app
       with:
@@ -35,13 +45,26 @@ jobs:
         keyStorePassword: ${{ secrets.KEY_STORE_PASSWORD }}
         keyPassword: ${{ secrets.KEY_PASSWORD }}
 
-    - name: Upload signed APK
+    - name: Upload debug build
       uses: actions/upload-artifact@main
       with:
-        name: ChromeXt.apk
+        name: ChromeXt_debug.apk
+        path: app/build/ChromeXt_debug.apk
+
+    - name: Upload signed APK
+      if: ${{ ( github.event_name != 'pull_request' && github.ref == 'refs/heads/master' ) || github.ref_type == 'tag' }}
+      uses: actions/upload-artifact@main
+      with:
+        name: ChromeXt_signed.apk
         path: ${{steps.sign_app.outputs.signedReleaseFile}}
 
-    - name: Collect signed APK
+    - name: Collect debug build
       uses: actions/download-artifact@main
       with:
-        name: ChromeXt.apk
+        name: ChromeXt_debug.apk
+
+    - name: Collect signed APK
+      if: ${{ ( github.event_name != 'pull_request' && github.ref == 'refs/heads/master' ) || github.ref_type == 'tag' }}
+      uses: actions/download-artifact@main
+      with:
+        name: ChromeXt_signed.apk

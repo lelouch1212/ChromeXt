@@ -2,7 +2,6 @@ package org.matrix.chromext.hook
 
 import android.content.Context
 import android.os.Bundle
-import android.os.Handler
 import android.util.DisplayMetrics
 import android.view.Menu
 import android.view.MenuInflater
@@ -70,7 +69,7 @@ object PageMenuHook : BaseHook() {
         }
         "org.matrix.chromext:id/install_script_id" -> {
           val sandBoxed = shouldBypassSandbox(getUrl())
-          Chrome.evaluateJavascript(listOf("Symbol.installScript(true);"), null, sandBoxed)
+          Chrome.evaluateJavascript(listOf("Symbol.installScript(true);"), null, null, sandBoxed)
         }
         "org.matrix.chromext:id/developer_tools_id" -> Listener.on("inspectPages")
         "org.matrix.chromext:id/eruda_console_id" ->
@@ -84,8 +83,10 @@ object PageMenuHook : BaseHook() {
     }
 
     findMethod(proxy.chromeTabbedActivity) {
-          // public boolean onMenuOrKeyboardAction(int id, boolean fromMenu)
-          parameterTypes contentDeepEquals arrayOf(Int::class.java, Boolean::class.java) &&
+          // public boolean onMenuOrKeyboardAction(int id, boolean fromMenu, ? triggeringMotion)
+          (parameterCount == 2 || parameterCount == 3) &&
+              parameterTypes[0] == Int::class.java &&
+              parameterTypes[1] == Boolean::class.java &&
               returnType == Boolean::class.java
         }
         .hookBefore {
@@ -95,8 +96,10 @@ object PageMenuHook : BaseHook() {
         }
 
     findMethod(proxy.customTabActivity) {
-          // public boolean onMenuOrKeyboardAction(int id, boolean fromMenu)
-          parameterTypes contentDeepEquals arrayOf(Int::class.java, Boolean::class.java) &&
+          // public boolean onMenuOrKeyboardAction(int id, boolean fromMenu, ? triggeringMotion)
+          (parameterCount == 2 || parameterCount == 3) &&
+              parameterTypes[0] == Int::class.java &&
+              parameterTypes[1] == Boolean::class.java &&
               returnType == Boolean::class.java
         }
         .hookBefore {
@@ -125,18 +128,15 @@ object PageMenuHook : BaseHook() {
               findMenuHook!!.unhook()
               val appMenuPropertiesDelegateImpl = it.result::class.java.superclass as Class<*>
               // Can be found by searching `Android.PrepareMenu`
+
+              val parameters = appMenuPropertiesDelegateImpl.declaredConstructors[0].parameterTypes
+
               val mContext =
-                  findField(appMenuPropertiesDelegateImpl, true) {
-                    Context::class.java.isAssignableFrom(type)
-                  }
+                  findField(appMenuPropertiesDelegateImpl, true) { type == parameters[0] }
               mContext.setAccessible(true)
+
               val mActivityTabProvider =
-                  findField(appMenuPropertiesDelegateImpl, true) {
-                    type.interfaces.size == 1 &&
-                        findFieldOrNull(type.superclass as Class<*>) {
-                          type == Handler::class.java
-                        } != null
-                  }
+                  findField(appMenuPropertiesDelegateImpl, true) { type == parameters[1] }
               mActivityTabProvider.setAccessible(true)
 
               if (Chrome.isBrave) {
