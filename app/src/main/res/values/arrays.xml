@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
 	<string-array name="xposedscope">
+		<item>app.vanadium.browser</item>
 		<item>com.android.browser</item>
 		<item>com.android.chrome</item>
 		<item>com.brave.browser</item>
@@ -23,6 +24,7 @@
 		<item>com.sec.android.app.sbrowser.beta</item>
 		<item>com.vivaldi.browser</item>
 		<item>com.vivaldi.browser.snapshot</item>
+		<item>org.axpos.aosmium</item>
 		<item>org.bromite.bromite</item>
 		<item>org.chromium.chrome</item>
 		<item>org.chromium.thorium</item>
