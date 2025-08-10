@@ -10,7 +10,7 @@ We hook the `onUpdateUrl` function in [UserScript.kt](app/src/main/java/org/matr
 add URL comparison there and evaluate JavaScript using the `javascript:` scheme (or DevTools Protocol when possible).
 
 Chromium based browsers,
-such as [Egde](https://www.microsoft.com/en-us/edge/download),
+such as ~~[Edge](https://www.microsoft.com/en-us/edge/download),~~
 [Bromite](https://github.com/bromite/bromite),
 [Samsung Internet](https://en.wikipedia.org/wiki/Samsung_Internet),
 and [Brave](https://github.com/brave/brave-browser), are fully supported.
@@ -52,6 +52,8 @@ Currently, ChromeXt supports almost all [Tampermonkey APIs](https://www.tampermo
 5. @grant: GM_addStyle, GM_addElement, GM_xmlhttpRequest, GM_openInTab, GM_registerMenuCommand (shown in the `Resources` panel of eruda), GM_unregisterMenuCommand, GM_download, unsafeWindow (= window)
 6. @grant: GM_setValue, GM_getValue (less powerful than GM.getValue), GM_listValues, GM_addValueChangeListener, GM_removeValueChangeListener, GM_setClipboard, GM_cookie, GM_notification, window.close
 7. @require, @resource (without [Subresource Integrity](https://www.tampermonkey.net/documentation.php#api:Subresource_Integrity))
+8. @inject-into, @sandox: by default, imported scripts using `@require` can define/overwrite global JavaScript objects; one can set `@inject-into content` or `@sandbox DOM` to disable this behavior
+9. @noframes: note that, to load UserScripts for frames, there must be a script with `@grant frames` on the main page
 
 These APIs are implemented differently from the official ones, please refer to the source files
 [Local.kt](app/src/main/java/org/matrix/chromext/script/Local.kt) and
@@ -77,8 +79,8 @@ From the three dots page menu, ChromeXt offers you the
 1. `Developer tools` menu for the UserScript manager front end,
 2. `Eruda console` menu for other pages.
 
-For `Edge` browser, these menus are moved to the page info menu,
-which locates at the left corner inside the URL input bar.
+~~For `Edge` browser, these menus are moved to the page info menu,
+which locates at the left corner inside the URL input bar.~~
 
 For WebView based browsers and _Samsung Internet_, these menu items are presented in the context menu.
 

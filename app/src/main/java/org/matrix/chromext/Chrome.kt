@@ -4,6 +4,7 @@ import android.app.NotificationChannel
 import android.app.NotificationChannelGroup
 import android.app.NotificationManager
 import android.content.Context
+import android.net.Uri
 import android.net.http.HttpResponseCache
 import android.os.Build
 import android.os.Handler
@@ -22,6 +23,7 @@ import org.matrix.chromext.hook.UserScriptHook
 import org.matrix.chromext.hook.WebViewHook
 import org.matrix.chromext.proxy.UserScriptProxy
 import org.matrix.chromext.script.Local
+import org.matrix.chromext.script.ScriptDbManager
 import org.matrix.chromext.utils.Log
 import org.matrix.chromext.utils.XMLHttpRequest
 import org.matrix.chromext.utils.findField
@@ -222,9 +224,43 @@ object Chrome {
     }
   }
 
+  fun injectFrames(tab: Any? = null) {
+    val url = getUrl(tab)!!
+    IO.submit {
+      val tabId = getTabId(tab, url)
+      wakeUpDevTools()
+      var client = DevSessions.new(tabId, "page")
+      DevSessions.add(client)
+      val duplicated = client.isPageEnabled(true)
+      if (duplicated) return@submit
+      var frames: MutableMap<String, String> = mutableMapOf<String, String>()
+      client.listen {
+        if (it.has("method")) {
+          val method = it.getString("method")
+          val params = it.getJSONObject("params")
+          val frameId =
+              if (method == "Page.frameDetached") {
+                params.getString("frameId")
+              } else if (method == "Page.frameNavigated") {
+                params.getJSONObject("frame").getString("id")
+              } else null
+          if (method == "Page.frameScheduledNavigation" && params.getString("url") != url) {
+            frames.put(params.getString("frameId"), params.getString("url"))
+          } else if (frameId != null && frames.containsKey(frameId)) {
+            val frameUrl = frames.get(frameId)
+            Handler(getContext().mainLooper).post {
+              ScriptDbManager.invokeScript(frameUrl!!, tab, frameId)
+            }
+            frames.remove(frameId)
+          }
+        }
+      }
+    }
+  }
+
   private fun evaluateJavascriptDevTools(codes: List<String>, tabId: String, bypassCSP: Boolean) {
     wakeUpDevTools()
-    var client = DevSessions.new(tabId)
+    var client = DevSessions.new(tabId, "page")
     codes.forEach { client.evaluateJavascript(it) }
     // Bypass CSP is only effective after reloading
     client.bypassCSP(bypassCSP)
@@ -235,23 +271,33 @@ object Chrome {
   fun evaluateJavascript(
       codes: List<String>,
       tab: Any? = null,
+      frameId: String? = null,
       forceDevTools: Boolean = false,
       bypassCSP: Boolean = false,
   ) {
-    if (forceDevTools) {
+    if (codes.size == 0) return
+    if (frameId != null || forceDevTools) {
       val url = getUrl(tab)
       IO.submit {
         val tabId = getTabId(tab, url)
-        evaluateJavascriptDevTools(codes, tabId, bypassCSP)
+        if (frameId != null) {
+          var client = DevSessions.new(tabId, "page")
+          val params = JSONObject().put("frameId", frameId)
+          codes.forEach {
+            client.command(
+                null, "Page.navigate", params.put("url", "javascript: ${Uri.encode(it)}"))
+          }
+        } else {
+          evaluateJavascriptDevTools(codes, tabId, bypassCSP)
+        }
       }
     } else {
-      if (codes.size == 0) return
       Handler(getContext().mainLooper).post {
         if (WebViewHook.isInit) {
           codes.forEach { WebViewHook.evaluateJavascript(it, tab) }
         } else if (UserScriptHook.isInit) {
           val failed = codes.filter { !UserScriptProxy.evaluateJavascript(it, tab) }
-          if (failed.size > 0) evaluateJavascript(failed, tab, true)
+          if (failed.size > 0) evaluateJavascript(failed, tab, frameId, true)
         }
       }
     }
